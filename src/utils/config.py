@@ -20,6 +20,7 @@ table_user_night_location = "night_stay_s2cell_demo"
 table_user_work_location = "work_place_s2cell_demo"
 table_user_professional = "user_professional_status_profile_demo"
 table_mcc = "table_mcc"
+table_night_stay_type = "night_stay_type_demo"
 
 
 mode_of_transport_labels = ["stationary", "undefined",
@@ -68,3 +69,9 @@ H3_res = 12
 """
 Frequent trajectories settings
 """
+
+"""
+Night stay settings
+"""
+
+min_night_stay_time = 120 # 2 hours

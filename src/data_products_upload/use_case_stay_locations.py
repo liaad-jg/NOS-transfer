@@ -21,30 +21,6 @@ def aggregate_geolevels_in_user_profile(client, source_dataset, user_profile_tab
     return user_profile_sccode, user_profile_frcode, user_profile_cocode
 
 
-def aggregate_geolevels_in_user_profile1(client, source_dataset, user_profile_table, destination_dataset, polygon_table):
-    polygons = client.query(f"SELECT * FROM `{destination_dataset}.{polygon_table}`").to_dataframe()
-    #user_profile = client.query(f"SELECT * FROM `{source_dataset}.{user_profile_table}`").to_dataframe()
-    user_profile = client.query(f"SELECT imsi, polygon_id as sccode, residential_status, day_part FROM `{source_dataset}.{user_profile_table}` where polygon_id in (select distinct(sccode) from data_products.polygons where polygon_description = 'Secção')").to_dataframe()
-    user_profile['day_part'] = user_profile['day_part'].astype(str)
-
-    # Define the desired order of categories
-    status_order = ['resident','national tourist','international tourist','regular visitor','casual visitor','commuter']
-
-    # Convert the 'status' column to the Categorical data type with the desired category order
-    user_profile['residential_status'] = pd.Categorical(user_profile['residential_status'], categories=status_order, ordered=True)
-
-    # Sort the DataFrame based on the 'status' column
-    user_profile_sorted = user_profile.sort_values('residential_status')
-
-    # Drop duplicates based on 'user' and 'ccode' columns
-    #user_profile_sorted_deduplicated = user_profile_sorted.drop_duplicates(subset=['user', 'ccode'])
-
-    user_profile_sccode = user_profile_sorted.merge(polygons.loc[:, ["sccode", "frcode", "cocode"]].drop_duplicates(), on="sccode", how="left")
-    user_profile_frcode= user_profile_sccode.drop_duplicates(subset=['imsi', 'frcode']).reset_index(drop=True)
-    user_profile_cocode= user_profile_sccode.drop_duplicates(subset=['imsi', 'cocode']).reset_index(drop=True)
-
-    return user_profile_sccode, user_profile_frcode, user_profile_cocode
-
 def aggregate_geolevels_in_work_place(client, source_dataset, work_place_table, destination_dataset, polygon_table):
     polygons = client.query(f"SELECT * FROM `{destination_dataset}.{polygon_table}`").to_dataframe()
     work_place = client.query(f"SELECT DISTINCT imsi, s2code, day_part FROM `{source_dataset}.{work_place_table}` WHERE work_place = 'yes'").to_dataframe()
@@ -68,15 +44,11 @@ def populate_stay_location(client, level1, level2, user_profile_table, work_plac
     # Convert DataFrame to temporary BigQuery table
     temp_table_user = 'rw_data_west1.temp_table_user'
     to_gbq(user_profile_table, temp_table_user, project_id='cityanalyser-inesc-lab-300200', if_exists='replace')
-    print('length temp:', len(user_profile_table))
     
     #query = f"""SELECT count(distinct(imsi)) from {temp_table_id} where residential_status = 'resident'"""
     #print(client.query(query).to_dataframe())
     temp_table_work = 'rw_data_west1.temp_table_work'
     to_gbq(work_place_table, temp_table_work, project_id='cityanalyser-inesc-lab-300200', if_exists='replace')
-    print('length temp:', len(work_place_table))
-    
-    
 
  # Prepare SQL query to populate the destination table
     query = f"""

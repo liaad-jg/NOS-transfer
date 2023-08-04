@@ -1,6 +1,7 @@
 import pandas as pd
 from google.cloud import bigquery
 import numpy as np
+import utils.config as config
 
     
 def get_night_data_profile(polygon_users_df, midnight_df):
@@ -104,28 +105,28 @@ def merge_old_new_profile(new_df, old_df):
         if pd.isnull(df_res_status):
             return full_res_status
         elif pd.isnull(full_res_status):
-            if length_of_stay  < 2.0 and stay_time_night < 180.0 and stay_time_day >= 30.0:
+            if length_of_stay  < 2.0 and stay_time_night < config.min_night_stay_time and stay_time_day >= 30.0:
                 return 'casual visitor'
-            if length_of_stay  >= 2.0 and stay_time_night < 180.0 and stay_time_day >= 30.0:
+            if length_of_stay  >= 2.0 and stay_time_night < config.min_night_stay_time and stay_time_day >= 30.0:
                 return 'regular visitor'
             else:     
                 return df_res_status
         elif stay_time_night < 30.0 and stay_time_day < 30.0:
             return 'commuter'
-        elif length_of_stay  < 2.0 and 30.0 <= stay_time_night < 180.0 and stay_time_day < 30.0:
+        elif length_of_stay  < 2.0 and 30.0 <= stay_time_night < config.min_night_stay_time and stay_time_day < 30.0:
             return 'casual visitor'
-        elif length_of_stay  >= 2.0 and 30.0 <= stay_time_night < 180.0 and stay_time_day < 30.0:
+        elif length_of_stay  >= 2.0 and 30.0 <= stay_time_night < config.min_night_stay_time and stay_time_day < 30.0:
             return 'regular visitor'
-        elif length_of_stay  >= 2.0 and night_count >= 0.0 and stay_time_day >= 30.0 and stay_time_night < 180.0:
+        elif length_of_stay  >= 2.0 and night_count >= 0.0 and stay_time_day >= 30.0 and stay_time_night < config.min_night_stay_time:
             return 'regular visitor'
-        elif length_of_stay  < 2.0 and night_count >= 0.0 and stay_time_day >= 30.0 and stay_time_night < 180.0:
+        elif length_of_stay  < 2.0 and night_count >= 0.0 and stay_time_day >= 30.0 and stay_time_night < config.min_night_stay_time:
             return 'casual visitor'            
-        elif night_count > 0.0 and night_count < 4.0 and stay_time_night >= 180.0:
+        elif night_count > 0.0 and night_count < 4.0 and stay_time_night >= config.min_night_stay_time:
             if mcc == '268':
                 return 'national tourist'
             else:
                 return 'international tourist'     
-        elif night_count >= 4.0 and stay_time_night >= 180.0:
+        elif night_count >= 4.0 and stay_time_night >= config.min_night_stay_time:
             return 'resident'
        
             
@@ -140,11 +141,11 @@ def merge_old_new_profile(new_df, old_df):
     return merged_df
 
 def update_home(one_df):
-    resident_filter = (one_df['night_count'] > 0.0) & (one_df['stay_time_night'] >= 180.0)
+    resident_filter = (one_df['night_count'] > 0.0) & (one_df['stay_time_night'] >= config.min_night_stay_time)
     resident_df = one_df[resident_filter]
 
     # Filter rows with quality 'bad' and marks equal to 0.0
-    other_filter = (one_df['night_count'] == 0.0) |((one_df['night_count'] > 0.0) & (one_df['stay_time_night'] < 180.0))
+    other_filter = (one_df['night_count'] == 0.0) |((one_df['night_count'] > 0.0) & (one_df['stay_time_night'] < config.min_night_stay_time))
     other_df = one_df[other_filter]
     
     # Sort the DataFrame within each group by 'marks' and 'score' in descending order
@@ -158,12 +159,12 @@ def update_home(one_df):
     return full_df
 
 def update_work(one_df):
-    df_commute = one_df[(one_df['stay_time_day']<180) | (one_df['day_count'] <= 2)].copy()
+    df_commute = one_df[(one_df['stay_time_day']<config.min_night_stay_time) | (one_df['day_count'] <= 2)].copy()
     df_commute.loc[:, 'day_stay_place']= 'other'
 
     # Sort the DataFrame within each group by 'count' and 'time' in descending order
     df_sorted = one_df.groupby('imsi', group_keys=False).apply(
-    lambda x: x[(x['stay_time_day'] >= 180) & (x['day_count'] > 2)].sort_values(['day_count', 'stay_time_day'], ascending=False))
+    lambda x: x[(x['stay_time_day'] >= config.min_night_stay_time) & (x['day_count'] > 2)].sort_values(['day_count', 'stay_time_day'], ascending=False))
     # Update label to 'home' for the first row within each group (highe\\\\\st count and time)
     df_sorted['day_stay_place'] = df_sorted.groupby('imsi').cumcount().eq(0).map({True: 'yes', False: 'other'})
 
@@ -240,21 +241,17 @@ def get_users_in_polygon(polygon, current_day_part, raw_table_id, client):
     return full_day_df, midnight_df
 
 
-def insert_user_residential_status(client, raw_table_id, current_day_part):
+def insert_user_residential_status(client, project_dataset, raw_table_id, current_day_part):
 
-    dataset = 'rw_data_west1'
-    table_list = [table.table_id for table in client.list_tables(dataset)]
     table_name = 'user_profile_v1'
-    table_ref = client.dataset(dataset).table(table_name)
-    BGRI = 'data_products.polygons'
     
-
     # if the residential status table already exists no need to create but merge old data with new data with updatedvalues
     # one day at a time
-    column_types = {'polygon_id': object, 'imsi': object,'mcc':int, 'night_count':float, 'stay_time_night':float ,'day_count':float, 'stay_time_day':float, 'length_of_stay': float, 'night_stay_place': object, 'day_stay_place':object, 'residential_status': object, 'day_part': 'datetime64'}
+    column_types = {'polygon_id': object, 'imsi': object,'mcc':int, 'night_count':float, 'stay_time_night':float ,'day_count':float, 
+                    'stay_time_day':float, 'length_of_stay': float, 'night_stay_place': object, 'day_stay_place':object, 'residential_status': object, 'day_part': 'datetime64'}
     one_df = pd.DataFrame(columns=column_types.keys()).astype(column_types)
     
-    sql = f"SELECT frcode as polygon_id, geography AS polygon_geom FROM {BGRI} WHERE polygon_description = 'Freguesia' and cocode in ('0303', '1313')"
+    sql = f"SELECT frcode as polygon_id, geography AS polygon_geom FROM {project_dataset}.{config.table_polygons} WHERE polygon_description = 'Freguesia' and cocode in ('0303', '1313')"
     
     shape_df = client.query(sql)
    
@@ -268,7 +265,7 @@ def insert_user_residential_status(client, raw_table_id, current_day_part):
             day_df = get_day_data_profile(polygon_users_df)
             new_df = merge_day_night(night_df, day_df, current_day_part)
             previous_day_part = current_day_part - pd.Timedelta(days=1)
-            sql_old=f"SELECT * FROM {dataset}.{table_name} WHERE day_part = DATE('{previous_day_part}') AND polygon_id = '{pid}'"
+            sql_old=f"SELECT * FROM {project_dataset}.{table_name} WHERE day_part = DATE('{previous_day_part}') AND polygon_id = '{pid}'"
             old_df= client.query(sql_old).to_dataframe()
             
             old_df.drop('polygon_id', axis = 1)
@@ -282,7 +279,7 @@ def insert_user_residential_status(client, raw_table_id, current_day_part):
     full_df=update_home(one_df)
     full_df_2=update_work(full_df)
     final_df= update_residents(full_df_2)
-    append_df(client, dataset, table_name, final_df)
+    append_df(client, project_dataset, table_name, final_df)
               
         
         
