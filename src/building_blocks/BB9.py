@@ -18,7 +18,7 @@ def get_night_data_profile(polygon_users_df, midnight_df):
     night_df = night_df.groupby('imsi').agg(first_seen=('datetime', 'min'), last_seen=('datetime', 'max'), mcc= ('mcc', 'max'))
     night_df['residential_status'] = night_df['mcc'].apply(lambda x: 'national tourist' if x == '268' else 'international tourist')
     time_diff = (night_df['last_seen'] - night_df['first_seen']).dt.total_seconds() / 60
-    night_df['residential_status'] = ['commuter' if diff < 30 else label for diff, label in zip(time_diff, night_df['residential_status'])]
+    night_df['residential_status'] = ['commuter' if diff < config.max_commute_time else label for diff, label in zip(time_diff, night_df['residential_status'])]
     night_df.loc[:, 'stay_time_night'] = time_diff
     night_df['stay_time_day']=0.0
     night_df['night_count']=1.0
@@ -44,7 +44,7 @@ def get_day_data_profile(polygon_users_df):
     day_df = day_df.sort_values(['imsi', 'datetime', 'mcc'], ascending=[True, True, True]).reset_index()
     day_df = day_df.groupby('imsi').agg(first_seen=('datetime', 'min'), last_seen=('datetime', 'max'), mcc= ('mcc', 'max'))
     time_diff = (day_df['last_seen'] - day_df['first_seen']).dt.total_seconds() / 60
-    day_df['residential_status'] = ['commuter' if diff < 30 else 'casual visitor' for diff in time_diff]
+    day_df['residential_status'] = ['commuter' if diff < config.max_commute_time else 'casual visitor' for diff in time_diff]
     day_df.loc[:, 'stay_time_day'] = time_diff
     day_df['stay_time_night']=0.0
     day_df['night_count']=0.0
@@ -105,28 +105,28 @@ def merge_old_new_profile(new_df, old_df):
         if pd.isnull(df_res_status):
             return full_res_status
         elif pd.isnull(full_res_status):
-            if length_of_stay  < 2.0 and stay_time_night < config.min_night_stay_time and stay_time_day >= 30.0:
+            if length_of_stay  < config.min_regular_visit_days and stay_time_night < config.min_night_stay_time and stay_time_day >= config.max_commute_time:
                 return 'casual visitor'
-            if length_of_stay  >= 2.0 and stay_time_night < config.min_night_stay_time and stay_time_day >= 30.0:
+            if length_of_stay  >= config.min_regular_visit_days and stay_time_night < config.min_night_stay_time and stay_time_day >= config.max_commute_time:
                 return 'regular visitor'
             else:     
                 return df_res_status
-        elif stay_time_night < 30.0 and stay_time_day < 30.0:
+        elif stay_time_night < config.max_commute_time and stay_time_day < config.max_commute_time:
             return 'commuter'
-        elif length_of_stay  < 2.0 and 30.0 <= stay_time_night < config.min_night_stay_time and stay_time_day < 30.0:
+        elif length_of_stay  < config.min_regular_visit_days and config.max_commute_time <= stay_time_night < config.min_night_stay_time and stay_time_day < config.max_commute_time:
             return 'casual visitor'
-        elif length_of_stay  >= 2.0 and 30.0 <= stay_time_night < config.min_night_stay_time and stay_time_day < 30.0:
+        elif length_of_stay  >= config.min_regular_visit_days and config.max_commute_time <= stay_time_night < config.min_night_stay_time and stay_time_day < config.max_commute_time:
             return 'regular visitor'
-        elif length_of_stay  >= 2.0 and night_count >= 0.0 and stay_time_day >= 30.0 and stay_time_night < config.min_night_stay_time:
+        elif length_of_stay  >= config.min_regular_visit_days and night_count >= 0.0 and stay_time_day >= config.max_commute_time and stay_time_night < config.min_night_stay_time:
             return 'regular visitor'
-        elif length_of_stay  < 2.0 and night_count >= 0.0 and stay_time_day >= 30.0 and stay_time_night < config.min_night_stay_time:
+        elif length_of_stay  < config.min_regular_visit_days and night_count >= 0.0 and stay_time_day >= config.max_commute_time and stay_time_night < config.min_night_stay_time:
             return 'casual visitor'            
-        elif night_count > 0.0 and night_count < 4.0 and stay_time_night >= config.min_night_stay_time:
+        elif night_count > 0.0 and night_count < config.min_residence_days and stay_time_night >= config.min_night_stay_time:
             if mcc == '268':
                 return 'national tourist'
             else:
                 return 'international tourist'     
-        elif night_count >= 4.0 and stay_time_night >= config.min_night_stay_time:
+        elif night_count >= config.min_residence_days and stay_time_night >= config.min_night_stay_time:
             return 'resident'
        
             
@@ -180,12 +180,12 @@ def update_residents(full_df):
     full_df.loc[mask, 'residential_status'] = 'regular visitor'
     
     mask1 = (full_df['night_stay_place'] != 'yes') & (full_df['residential_status'] == 'national tourist')
-    full_df.loc[mask1 & (full_df['night_count'] < 2.0) , 'residential_status'] = 'casual visitor'
-    full_df.loc[mask1 & (full_df['night_count'] >= 2.0), 'residential_status'] = 'regular visitor'
+    full_df.loc[mask1 & (full_df['night_count'] < config.min_regular_visit_days) , 'residential_status'] = 'casual visitor'
+    full_df.loc[mask1 & (full_df['night_count'] >= config.min_regular_visit_days), 'residential_status'] = 'regular visitor'
     
     mask2 = (full_df['night_stay_place'] != 'yes') & (full_df['residential_status'] == 'international tourist')
-    full_df.loc[mask2 & (full_df['night_count'] < 2.0) , 'residential_status'] = 'casual visitor'
-    full_df.loc[mask2 & (full_df['night_count'] >= 2.0), 'residential_status'] = 'regular visitor'
+    full_df.loc[mask2 & (full_df['night_count'] < config.min_regular_visit_days) , 'residential_status'] = 'casual visitor'
+    full_df.loc[mask2 & (full_df['night_count'] >= config.min_regular_visit_days), 'residential_status'] = 'regular visitor'
     
     return full_df
     
@@ -209,10 +209,10 @@ def append_df(client, dataset_id, table_name, final_df):
     job.result()  # Wait for the job to complete
 
     
-def get_users_in_polygon(polygon, current_day_part, raw_table_id, client):
+def get_users_in_polygon(polygon, current_day_part, raw_table_id, client, project_dataset):
     previous_day_part = current_day_part - pd.Timedelta(days=1)
     # Query the BigQuery table for rows with latitude and longitude inside the polygon
-    query = f""" SELECT imsi, datetime, mcc FROM {raw_table_id} WHERE ST_INTERSECTS(ST_GEOGFROMWKB(ST_AsBinary(@polygon)), 
+    query = f""" SELECT imsi, datetime, mcc FROM {project_dataset}.{raw_table_id} WHERE ST_INTERSECTS(ST_GEOGFROMWKB(ST_AsBinary(@polygon)), 
     ST_GEOGPOINT(CAST(lon AS FLOAT64), CAST(lat AS FLOAT64)))
       AND day_part = '{current_day_part}'"""
     
@@ -224,7 +224,7 @@ def get_users_in_polygon(polygon, current_day_part, raw_table_id, client):
 
     full_day_df = client.query(query, job_config=job_config).to_dataframe()
     
-    query2 = f""" SELECT imsi, datetime, mcc FROM {raw_table_id} WHERE ST_INTERSECTS(ST_GEOGFROMWKB(ST_AsBinary(@polygon)), 
+    query2 = f""" SELECT imsi, datetime, mcc FROM {project_dataset}.{raw_table_id} WHERE ST_INTERSECTS(ST_GEOGFROMWKB(ST_AsBinary(@polygon)), 
     ST_GEOGPOINT(CAST(lon AS FLOAT64), CAST(lat AS FLOAT64)))
     AND day_part = '{previous_day_part}' AND
     (EXTRACT(HOUR FROM CAST({'datetime'} AS DATETIME)) >= 20 AND
@@ -242,44 +242,54 @@ def get_users_in_polygon(polygon, current_day_part, raw_table_id, client):
 
 
 def insert_user_residential_status(client, project_dataset, raw_table_id, current_day_part):
+    table_name = 'user_profile_demo'
+    table_ref = client.dataset(dataset).table(table_name)
+    #BGRI = 'dsmanalytics-p-032502.reference_ine.tb_ine_bgri_2021_portugal_shape'
+    BGRI = 'data_products.polygons'
+    
+    column_types = {'polygon_id': object, 'imsi': object,'mcc':int, 'night_count':float, 'stay_time_night':float ,'day_count':float, 'stay_time_day':float, 'length_of_stay': float, 'night_stay_place': object, 'day_stay_place':object, 'residential_status': object, 'day_part': 'datetime64'}
+    final_df = pd.DataFrame(columns=column_types.keys()).astype(column_types)
+    
+    cocode_str = ', '.join([f"'{value}'" for value in config.area_cocodes])
+    
+    level_code_mapping = {
+    'Concelho': 'cocode',
+    'Freguesia': 'frcode',
+    'Secção': 'sccode'}
 
-    table_name = 'user_profile_v1'
     
-    # if the residential status table already exists no need to create but merge old data with new data with updatedvalues
-    # one day at a time
-    column_types = {'polygon_id': object, 'imsi': object,'mcc':int, 'night_count':float, 'stay_time_night':float ,'day_count':float, 
-                    'stay_time_day':float, 'length_of_stay': float, 'night_stay_place': object, 'day_stay_place':object, 'residential_status': object, 'day_part': 'datetime64'}
-    one_df = pd.DataFrame(columns=column_types.keys()).astype(column_types)
-    
-    sql = f"SELECT frcode as polygon_id, geography AS polygon_geom FROM {project_dataset}.{config.table_polygons} WHERE polygon_description = 'Freguesia' and cocode in ('0303', '1313')"
-    
-    shape_df = client.query(sql)
-   
-    for row in shape_df:
-        current_day_part = pd.Timestamp(current_day_part).date()
-        pid = row.polygon_id
-        polygon = row.polygon_geom
-        polygon_users_df, midnight_df = get_users_in_polygon(polygon, current_day_part, raw_table_id, client)
-        if(len(polygon_users_df)!=0):
-            night_df = get_night_data_profile(polygon_users_df, midnight_df)
-            day_df = get_day_data_profile(polygon_users_df)
-            new_df = merge_day_night(night_df, day_df, current_day_part)
-            previous_day_part = current_day_part - pd.Timedelta(days=1)
-            sql_old=f"SELECT * FROM {project_dataset}.{table_name} WHERE day_part = DATE('{previous_day_part}') AND polygon_id = '{pid}'"
-            old_df= client.query(sql_old).to_dataframe()
-            
-            old_df.drop('polygon_id', axis = 1)
-            latest_df = merge_old_new_profile(new_df, old_df)
-            latest_df['polygon_id'] = pid
-            
-            one_df = one_df.append(latest_df, ignore_index=True)
-        else:
-            continue
+    levels = ['Concelho', 'Freguesia', 'Secção']
+    for level in levels:
+        lcode = level_code_mapping[level]
+        one_df = pd.DataFrame(columns=column_types.keys()).astype(column_types)
+        sql = f"SELECT {lcode} as polygon_id, geography AS polygon_geom FROM {project_dataset}.{config.table_polygons} WHERE polygon_description = '{level}' and cocode in ({cocode_str}) "
+        
+        shape_df = client.query(sql)
+        for row in shape_df:
+            current_day_part = pd.Timestamp(current_day_part).date()
+            pid = row.polygon_id
+            polygon = row.polygon_geom
+            polygon_users_df, midnight_df = get_users_in_polygon(polygon, current_day_part, raw_table_id)
+            if(len(polygon_users_df)!=0):
+                night_df = get_night_data_profile(polygon_users_df, midnight_df, current_day_part, config.max_commute_time)
+                day_df = get_day_data_profile(polygon_users_df, current_day_part, config.max_commute_time)
+                new_df = merge_day_night(night_df, day_df, current_day_part)
+                previous_day_part = current_day_part - pd.Timedelta(days=1)
+                sql_old=f"SELECT * FROM {project_dataset}.{table_name} WHERE polygon_id = '{pid}'"
+                old_df= client.query(sql_old).to_dataframe()
+                old_df.drop('polygon_id', axis = 1)
+                latest_df = merge_old_new_profile(new_df, old_df, min_night_stay_time, config.max_commute_time, min_regular_visit_days, min_residence_days)
+                latest_df['polygon_id'] = pid
 
-    full_df=update_home(one_df)
-    full_df_2=update_work(full_df)
-    final_df= update_residents(full_df_2)
-    append_df(client, project_dataset, table_name, final_df)
+                one_df = one_df.append(latest_df, ignore_index=True)
+            else:
+                continue
+        full_df=update_home(one_df, min_night_stay_time)
+        full_df_2=update_work(full_df, min_night_stay_time)
+        level_df= update_residents(full_df_2, min_regular_visit_days)
+        print(level_df)
+        final_df = final_df.append(level_df, ignore_index= True)
+    append_df(client, {project_dataset}.{config.table_polygons}, table_name, final_df)
               
         
         
