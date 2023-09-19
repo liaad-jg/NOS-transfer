@@ -142,7 +142,9 @@ def insert_user_stay_place(client, source_table_id, current_day_part, dataset, d
     new_df = day_df.groupby('s2code').apply(lambda x:get_day_data_profile(x)).reset_index()
     
     previous_day_part = current_day_part - pd.Timedelta(days=1)
-    sql_old=f"SELECT * FROM {dataset}.{destination_table_id} WHERE day_part = DATE('{previous_day_part}')"
+    # to manage with missing days of data
+    sql_old=f"SELECT * FROM {dataset}.{destination_table_id})"
+    #sql_old=f"SELECT * FROM {dataset}.{destination_table_id} WHERE day_part = DATE('{previous_day_part}')"
     old_df= client.query(sql_old).to_dataframe()
     old_df.drop('day_part', axis = 1)
     
