@@ -71,7 +71,12 @@ Frequent trajectories settings
 """
 
 """
-Night stay settings
+User profile settings
 """
 
 min_night_stay_time = 120 # 2 hours
+max_commute_time = 30.0 # commuter is passing and does not stay in a location for 30 mins or more
+min_regular_visit_days = 2.0 # visit more than one day in a week is a regular visitor
+min_residence_days = 5.0 # stay more than 4.0 days in a week is a resident
+area_cocodes = ['0303','1313'] # codes of concelhos for which user profiles needs to be calculated
+    
