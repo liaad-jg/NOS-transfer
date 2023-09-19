@@ -2,7 +2,7 @@ import pandas as pd
 from google.cloud import bigquery
 import numpy as np
 from shapely.wkt import loads
-
+import utils.config as config
     
 def get_day_data_profile(day_df):
     day_df = day_df.sort_values(['imsi', 'datetime'], ascending=[True, True])
@@ -39,14 +39,14 @@ def merge_old_new_profile(new_df, old_df):
     
 def update_work(one_df):
     
-    df_commute = one_df[(one_df['stay_time']<120) | (one_df['day_count'] <= 2)].copy()
+    df_commute = one_df[(one_df['stay_time']<config.min_night_stay_time) | (one_df['day_count'] <= 2)].copy()
     df_commute.loc[:, 'work_place']= 'other'
     print((df_commute))
 
     # Sort the DataFrame within each group by 'count' and 'time' in descending order
     #df_sorted = one_df.groupby('imsi', group_keys=False).apply(lambda x: x.sort_values(['day_count', 'stay_time'], ascending=False))
     df_sorted = one_df.groupby('imsi', group_keys=False).apply(
-    lambda x: x[(x['stay_time'] >= 120) & (x['day_count'] > 2)].sort_values(['day_count', 'stay_time'], ascending=False)
+    lambda x: x[(x['stay_time'] >= config.min_night_stay_time) & (x['day_count'] > 2)].sort_values(['day_count', 'stay_time'], ascending=False)
 )
 
 
@@ -143,7 +143,7 @@ def insert_user_stay_place(client, source_table_id, current_day_part, dataset, d
     
     previous_day_part = current_day_part - pd.Timedelta(days=1)
     # to manage with missing days of data
-    sql_old=f"SELECT * FROM {dataset}.{destination_table_id})"
+    sql_old=f"SELECT * FROM {dataset}.{destination_table_id}"
     #sql_old=f"SELECT * FROM {dataset}.{destination_table_id} WHERE day_part = DATE('{previous_day_part}')"
     old_df= client.query(sql_old).to_dataframe()
     old_df.drop('day_part', axis = 1)
