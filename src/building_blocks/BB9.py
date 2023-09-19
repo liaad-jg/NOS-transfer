@@ -243,9 +243,6 @@ def get_users_in_polygon(polygon, current_day_part, raw_table_id, client, projec
 
 def insert_user_residential_status(client, project_dataset, raw_table_id, current_day_part):
     table_name = 'user_profile_demo'
-    table_ref = client.dataset(dataset).table(table_name)
-    #BGRI = 'dsmanalytics-p-032502.reference_ine.tb_ine_bgri_2021_portugal_shape'
-    BGRI = 'data_products.polygons'
     
     column_types = {'polygon_id': object, 'imsi': object,'mcc':int, 'night_count':float, 'stay_time_night':float ,'day_count':float, 'stay_time_day':float, 'length_of_stay': float, 'night_stay_place': object, 'day_stay_place':object, 'residential_status': object, 'day_part': 'datetime64'}
     final_df = pd.DataFrame(columns=column_types.keys()).astype(column_types)
