@@ -160,8 +160,7 @@ def insert_user_stay_place(client, source_table_id, current_day_part, dataset, d
     # Get the datatypes of columns
     column_types = full_df.dtypes
     
-    unique_values = len(full_df['imsi'].unique())
-    
+    load_results_to_table(client, dataset, destination_table_id, full_df, current_day_part)    
         
         
         
