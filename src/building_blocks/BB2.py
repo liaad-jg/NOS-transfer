@@ -2,9 +2,7 @@ import pandas as pd
 import numpy as np
 from shapely.wkt import loads
 from google.cloud import bigquery
-#from utils import config
-#import utils.config as config
-
+import utils.config as config
     
 def get_night_data_profile(night_df):
     night_df = night_df.sort_values(['imsi', 'datetime'], ascending=[True, True])
@@ -37,12 +35,12 @@ def merge_old_new_profile(new_df, old_df):
     
 def update_home(one_df):
     
-    df_commute = one_df[one_df['stay_time']<120].copy()
+    df_commute = one_df[one_df['stay_time']<config.min_night_stay_time].copy()
     
     df_commute.loc[:,'night_stay_place'] = 'other'
 
     df_sorted = one_df.groupby('imsi', group_keys=False).apply(
-    lambda x: x[x['stay_time'] >= 120].sort_values(['night_count', 'stay_time'], ascending=False))
+    lambda x: x[x['stay_time'] >= config.min_night_stay_time].sort_values(['night_count', 'stay_time'], ascending=False))
 
     # Update label to 'home' for the first row within each group (highest count and time)
     df_sorted['night_stay_place'] = df_sorted.groupby('imsi').cumcount().eq(0).map({True: 'yes', False: 'other'})
