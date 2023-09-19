@@ -138,7 +138,8 @@ def insert_user_stay_place(client, source_table_id, current_day_part, dataset, d
     print('new df len:',len(new_df))
     
     previous_day_part = current_day_part - pd.Timedelta(days=1)
-    sql_old=f"SELECT * FROM {dataset}.{destination_table_id} WHERE day_part = DATE('{previous_day_part}')"
+    sql_old=f"SELECT * FROM {dataset}.{destination_table_id})"
+    # sql_old=f"SELECT * FROM {dataset}.{destination_table_id} WHERE day_part = DATE('{previous_day_part}')"
     old_df= client.query(sql_old).to_dataframe()
     old_df.drop('day_part', axis = 1)
     
